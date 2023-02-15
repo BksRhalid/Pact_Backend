@@ -45,8 +45,8 @@ contract FreelanceContract is randomNumber {
         WaitingClientReview,
         WorkFinishedSuccessufully,
         DisputeOpened,
-        ClientLostInCourt,
-        WorkerLostInCourt,
+        ClientLostInDispute,
+        WorkerLostInDispute,
         DisputeClosed,
         CancelByFreelancer,
         CancelByClient,
@@ -314,6 +314,21 @@ contract FreelanceContract is randomNumber {
         price = thisContract.price;
     }
 
+    // Worker can request client validation
+
+    function requestClientValidation(uint256 _contractId)
+        external
+        inState(_contractId, ContractState.WorkStarted)
+        onlyWorker(_contractId)
+    {
+        ContractPact storage thisContract = contracts[_contractId];
+        thisContract.state = ContractState.WaitingClientReview;
+        emit ContractStateChange(
+            ContractState.WorkStarted,
+            ContractState.WaitingClientReview
+        );
+    }
+
     // Function for the client to validate the contract
 
     function setIsFinishedAndAllowPayment(uint256 _contractId)
@@ -422,13 +437,13 @@ contract FreelanceContract is randomNumber {
                 ContractPact storage thisContract = contracts[
                     thisDispute.contractId
                 ];
-                thisContract.state = ContractState.WorkerLostInCourt;
+                thisContract.state = ContractState.WorkerLostInDispute;
                 emit ContractIsFinished(thisDispute.contractId);
             } else {
                 ContractPact storage thisContract = contracts[
                     thisDispute.contractId
                 ];
-                thisContract.state = ContractState.ClientLostInCourt;
+                thisContract.state = ContractState.ClientLostInDispute;
                 emit ContractIsFinished(thisDispute.contractId);
             }
         }
