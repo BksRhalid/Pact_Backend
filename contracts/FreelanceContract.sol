@@ -274,18 +274,14 @@ contract FreelanceContract is randomNumber {
     function signContract(uint256 _contractId)
         external
         inState(_contractId, ContractState.WaitingWorkerSign)
-        onlyWorker(_contractId)
     {
         ContractPact storage thisContract = contracts[_contractId];
-        require(
-            thisContract.worker == msg.sender,
-            "Only the worker can sign this contract."
-        );
         require(
             thisContract.state == ContractState.WaitingWorkerSign,
             "The contract has already been signed."
         );
 
+        thisContract.worker = msg.sender;
         thisContract.state = ContractState.WorkStarted;
 
         emit ContractSigned(_contractId, msg.sender);
