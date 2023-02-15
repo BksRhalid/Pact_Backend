@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity 0.8.17;
+pragma solidity 0.8.18;
 
 import "./utils/randomNumber.sol";
 
@@ -147,6 +147,8 @@ contract FreelanceContract is randomNumber {
         _;
     }
 
+    // TODO : add modifier to check only jury of the dispute can call the function
+
     modifier onlyJury(uint256 _disputeId) {
         require(
             disputes[_disputeId].disputeJury[msg.sender] == true,
@@ -154,8 +156,6 @@ contract FreelanceContract is randomNumber {
         );
         _;
     }
-
-    // TODO : add modifier to check only jury of the dispute can call the function
 
     // Functions
 
@@ -347,6 +347,11 @@ contract FreelanceContract is randomNumber {
         inState(_contractId, ContractState.WorkStarted)
         onlyClientOrWorker(_contractId)
     {
+        // revert not enought jury in juryPool
+        require(
+            juryCounter >= 12,
+            "Not enough jury in juryPool to open a dispute."
+        );
         ContractPact storage thisContract = contracts[_contractId];
         thisContract.state = ContractState.DisputeOpened;
         emit ContractStateChange(
@@ -364,21 +369,27 @@ contract FreelanceContract is randomNumber {
         // select a jury member
         uint256 juryIndex = 0;
 
-        for (uint256 i = 0; i < 12; i++) {
-            uint256 randomIndex = random(juryCounter);
+        for (uint256 i = 0; i < 6; i++) {
+            uint256 randomIndex = random();
+            randomIndex = randomIndex % juryCounter;
             address jurySelected = juryPool[randomIndex];
             // address jurySelected = juryPool[juryIndex].juryAddress;
             if (
                 jurySelected != thisContract.client &&
                 jurySelected != thisContract.worker
             ) {
-                thisDispute.disputeJury[jurySelected] = false;
+                thisDispute.disputeJury[jurySelected] = true;
                 juryIndex++;
             } else {
                 i--;
             }
         }
-        // create a new dispute
+        // event a new dispute
+        emit DisputeCreated(disputeCounter, _contractId, msg.sender);
+        emit DisputeStateChange(
+            DisputeState.WaitingJuryVote,
+            DisputeState.WaitingJuryVote
+        );
     }
 
     // Function to get the disputeJury list of a dispute

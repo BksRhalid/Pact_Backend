@@ -3,7 +3,7 @@
 // using payment splitter >> https://www.youtube.com/watch?v=b5sQt4F8voA
 
 // SPDX-License-Identifier: MIT
-pragma solidity 0.8.17;
+pragma solidity 0.8.18;
 
 import "@openzeppelin/contracts/finance/PaymentSplitter.sol";
 
