@@ -8,7 +8,7 @@ module.exports = async ({ getNamedAccounts, deployments }) => {
 
   log("--------------------------------------");
   arguments = [];
-  const Voting = await deploy("Voting", {
+  const FreelanceContract = await deploy("FreelanceContract", {
     from: deployer,
     args: arguments,
     log: true,
@@ -18,8 +18,8 @@ module.exports = async ({ getNamedAccounts, deployments }) => {
   // Verify the smart contract
   if (!developmentChains.includes(network.name) && process.env.ETHERSCAN) {
     log("Verifying...");
-    await verify(Voting.address, arguments);
+    await verify(FreelanceContract.address, arguments);
   }
 };
 
-module.exports.tags = ["all", "voting", "main"];
+module.exports.tags = ["all", "freelancecontract", "main"];
