@@ -19,7 +19,7 @@ const { developmentChains } = require("../helper-hardhat-config");
       describe("🔎 Deployment hardhat deploy testing", async function () {
         it("should deploy the smart contract", async function () {
           await deployments.fixture(["freelancecontract"]);
-          freelancecontract = await ethers.getContract("FreelanceContract");
+          freelancecontract = await ethers.getContract("freelanceContract");
         });
       });
 
@@ -28,7 +28,7 @@ const { developmentChains } = require("../helper-hardhat-config");
       describe("🔎 Test freelance Contract set-up", function () {
         beforeEach(async () => {
           await deployments.fixture(["freelancecontract"]);
-          freelancecontract = await ethers.getContract("FreelanceContract");
+          freelancecontract = await ethers.getContract("freelanceContract");
         });
         // Test addWorker
         it("should ADD a new worker", async function () {
@@ -64,7 +64,7 @@ const { developmentChains } = require("../helper-hardhat-config");
       describe("🔎  Test freelance contract function creation unit test", async function () {
         beforeEach(async function () {
           await deployments.fixture(["freelancecontract"]);
-          freelancecontract = await ethers.getContract("FreelanceContract");
+          freelancecontract = await ethers.getContract("freelanceContract");
           client = accounts[1];
           worker = accounts[2];
           await freelancecontract.connect(client).addClient();
@@ -117,7 +117,7 @@ const { developmentChains } = require("../helper-hardhat-config");
       describe("🔎 Test freelance contract function cancel contract", async function () {
         beforeEach(async function () {
           await deployments.fixture(["freelancecontract"]);
-          freelancecontract = await ethers.getContract("FreelanceContract");
+          freelancecontract = await ethers.getContract("freelanceContract");
           client = accounts[1];
           worker = accounts[2];
           await freelancecontract.connect(client).addClient();
@@ -131,7 +131,7 @@ const { developmentChains } = require("../helper-hardhat-config");
           );
           await freelancecontract
             .connect(client)
-            .createContract(_deadline, _today, _hash);
+            .createContract(_deadline, _today, _hash, { value: 1 });
         });
         // Test cancel contract from client
         it("should EMIT ContractStateChange", async function () {
@@ -141,9 +141,9 @@ const { developmentChains } = require("../helper-hardhat-config");
             freelancecontract.connect(client).cancelContractByClient(1)
           )
             .to.emit(freelancecontract, "ContractStateChange")
-            .withArgs(0, 9);
+            .withArgs(0, 10);
           contract = await freelancecontract.contracts(1);
-          expect(contract.state).equal(9);
+          expect(contract.state).equal(10);
         });
         it("should NOT CANCEL a new contract", async function () {
           contract = await freelancecontract.contracts(1);
@@ -157,7 +157,7 @@ const { developmentChains } = require("../helper-hardhat-config");
       describe("🔎 Test freelance contract function sign contract", async function () {
         beforeEach(async function () {
           await deployments.fixture(["freelancecontract"]);
-          freelancecontract = await ethers.getContract("FreelanceContract");
+          freelancecontract = await ethers.getContract("freelanceContract");
           client = accounts[1];
           worker = accounts[2];
           await freelancecontract.connect(client).addClient();
@@ -171,7 +171,7 @@ const { developmentChains } = require("../helper-hardhat-config");
           );
           await freelancecontract
             .connect(client)
-            .createContract(_deadline, _today, _hash);
+            .createContract(_deadline, _today, _hash, { value: 1 });
         });
         // change function to update the worker
         it("should update the worker address", async function () {
@@ -207,45 +207,15 @@ const { developmentChains } = require("../helper-hardhat-config");
       describe("🔎 Test dispute contract function", async function () {
         beforeEach(async function () {
           await deployments.fixture(["freelancecontract"]);
-          freelancecontract = await ethers.getContract("FreelanceContract");
+          freelancecontract = await ethers.getContract("freelanceContract");
           client = accounts[1];
           await freelancecontract.connect(client).addClient();
           worker = accounts[2];
           await freelancecontract.connect(worker).addWorker();
-          jury_1 = accounts[3];
-          await freelancecontract.connect(jury_1).addJury();
-          jury_2 = accounts[4];
-          await freelancecontract.connect(jury_2).addJury();
-          jury_3 = accounts[5];
-          await freelancecontract.connect(jury_3).addJury();
-          jury_4 = accounts[6];
-          await freelancecontract.connect(jury_4).addJury();
-          jury_5 = accounts[7];
-          await freelancecontract.connect(jury_5).addJury();
-          jury_6 = accounts[8];
-          await freelancecontract.connect(jury_6).addJury();
-          jury_7 = accounts[9];
-          await freelancecontract.connect(jury_7).addJury();
-          jury_8 = accounts[10];
-          await freelancecontract.connect(jury_8).addJury();
-          jury_9 = accounts[11];
-          await freelancecontract.connect(jury_9).addJury();
-          jury_10 = accounts[12];
-          await freelancecontract.connect(jury_10).addJury();
-          jury_11 = accounts[13];
-          await freelancecontract.connect(jury_11).addJury();
-          jury_12 = accounts[14];
-          await freelancecontract.connect(jury_12).addJury();
-          jury_13 = accounts[15];
-          await freelancecontract.connect(jury_13).addJury();
-          jury_14 = accounts[16];
-          await freelancecontract.connect(jury_14).addJury();
-          jury_15 = accounts[17];
-          await freelancecontract.connect(jury_15).addJury();
-          jury_16 = accounts[18];
-          await freelancecontract.connect(jury_16).addJury();
-          jury_17 = accounts[19];
-          await freelancecontract.connect(jury_17).addJury();
+          // Jurypool
+          for (let i = 3; i < 20; i++) {
+            await freelancecontract.connect(accounts[i]).addJury();
+          }
           _price = 1;
           _deadline = 100;
           _today = 0;
@@ -281,10 +251,12 @@ const { developmentChains } = require("../helper-hardhat-config");
           ).to.be.revertedWith("Contract is not in the correct state.");
         });
 
+        // should generate select a Jury
+
         it("should EMIT DisputeStateChange", async function () {
-          await expect(freelancecontract.connect(worker).openDispute(1))
+          await expect(freelancecontract.connect(worker).selectJuryMember(1))
             .to.emit(freelancecontract, "DisputeStateChange")
-            .withArgs(0, 0);
+            .withArgs(1, 1);
         });
 
         //check if a random number is generated
@@ -292,116 +264,435 @@ const { developmentChains } = require("../helper-hardhat-config");
         it("should generate a number", async function () {
           jurycounter = await freelancecontract.juryCounter();
           number = jurycounter.toString();
-          transaction = await freelancecontract.random();
+          jurySelected = client.address;
+          _seed = String(jurySelected, worker.address).length;
+          console.log("_seed >>> : ", _seed);
+          transaction = await freelancecontract.random(_seed);
           randomGenerated = transaction % number;
+          console.log("randomGenerated >>> : ", randomGenerated);
           expect(randomGenerated).not.equal(undefined);
         });
 
-        // check if the random number is between 0 and juryCounter
-        it("should generate a number between 0 and juryCounter", async function () {
+        it("should NOT revert select a jury", async function () {
+          await freelancecontract.connect(worker).openDispute(1);
+          contract = await freelancecontract.contracts(1);
+          await expect(freelancecontract.connect(client).selectJuryMember(1)).to
+            .not.be.reverted;
+        });
+
+        // get juryMembers
+        it("should get juryMembers", async function () {
+          await freelancecontract.connect(client).openDispute(1);
+          transaction = await freelancecontract
+            .connect(client)
+            .selectJuryMember(1);
+          transaction.wait();
+          jury = await freelancecontract.getJuryMembers(1);
+          console.log("jury >>> : ", jury);
+          // should return 3 jury members
+          expect(jury.length).equal(3);
+        });
+      });
+
+      // ::::::::::::: UNIT TEST FOR VOTING PHASE::::::::::::: //
+
+      // vote // juryCounter // random // randomResult
+
+      describe("🔎 Test function of Voting process ", async function () {
+        beforeEach(async () => {
+          await deployments.fixture(["freelancecontract"]);
+          freelancecontract = await ethers.getContract("freelanceContract");
+          client = accounts[1];
+          await freelancecontract.connect(client).addClient();
+          worker = accounts[2];
+          await freelancecontract.connect(worker).addWorker();
+          // Jurypool
+          for (let i = 3; i < 20; i++) {
+            await freelancecontract.connect(accounts[i]).addJury();
+          }
+          _price = 1;
+          _deadline = 100;
+          _today = 0;
+          title = "title";
+          description = "description";
+          _hash = ethers.utils.keccak256(
+            ethers.utils.toUtf8Bytes(title + description)
+          );
+          await freelancecontract
+            .connect(client)
+            .createContract(_deadline, _today, _hash, { value: _price });
+          await freelancecontract.connect(worker).signContract(1);
+          await freelancecontract.connect(client).openDispute(1);
+          await freelancecontract.connect(client).selectJuryMember(1);
+          juryMembers = await freelancecontract.getJuryMembers(1);
+          //get signer from address
+          jury = [];
+          for (let i = 0; i < 20; i++) {
+            for (let j = 0; j < juryMembers.length; j++) {
+              if (accounts[i].address == juryMembers[j]) {
+                jury[j] = accounts[i];
+              }
+            }
+          }
+        });
+        // check if the juryCounter is correct
+        it("should return the correct juryCounter", async function () {
           jurycounter = await freelancecontract.juryCounter();
           number = jurycounter.toString();
-          transaction = await freelancecontract.random();
-          randomGenerated = transaction % number;
-          expect(randomGenerated).to.be.within(0, jurycounter);
+          expect(number).equal("17");
         });
 
-        // check the list of jurors address
-        it("should return the list of jurors address", async function () {
+        // // check if juros dispute has no vote yet - check hasVoted
+        it("should return false if juryMembers has no voted", async function () {
+          jury = juryMembers[0];
+          hasVoted = await freelancecontract.hasVoted(1, jury);
+          expect(hasVoted).equal(false);
+        });
+
+        it("should return true if juryMembers has voted", async function () {
+          Vote = await freelancecontract
+            .connect(jury[0])
+            .hasVoted(1, jury[0].address);
+          expect(Vote).equal(false);
+          transaction = await freelancecontract.connect(jury[0]).vote(1, true);
+          NewVote = await freelancecontract
+            .connect(jury[0])
+            .hasVoted(1, jury[0].address);
+          expect(NewVote).equal(true);
+        });
+
+        // SHOULD EMIT VOTE
+        it("should EMIT vote dispute id", async function () {
+          await expect(freelancecontract.connect(jury[0]).vote(1, true))
+            .to.emit(freelancecontract, "Voted")
+            .withArgs(1, jury[0].address);
+        });
+
+        it("should change vote count for client", async function () {
+          dispute = await freelancecontract.disputes(1);
+          totalVoteCount = dispute.totalVoteCount;
+          clientVoteCount = dispute.clientVoteCount;
+          workerVoteCount = dispute.workerVoteCount;
+          expect(totalVoteCount).equal(0);
+          expect(clientVoteCount).equal(0);
+          expect(workerVoteCount).equal(0);
+          await freelancecontract.connect(jury[0]).vote(1, true);
+          dispute = await freelancecontract.disputes(1);
+          totalVoteCount = dispute.totalVoteCount;
+          clientVoteCount = dispute.clientVoteCount;
+          workerVoteCount = dispute.workerVoteCount;
+          expect(totalVoteCount).equal(1);
+          expect(clientVoteCount).equal(1);
+          expect(workerVoteCount).equal(0);
+        });
+
+        it("should change vote count for worker", async function () {
+          dispute = await freelancecontract.disputes(1);
+          totalVoteCount = dispute.totalVoteCount;
+          clientVoteCount = dispute.clientVoteCount;
+          workerVoteCount = dispute.workerVoteCount;
+          expect(totalVoteCount).equal(0);
+          expect(clientVoteCount).equal(0);
+          expect(workerVoteCount).equal(0);
+          await freelancecontract.connect(jury[0]).vote(1, false);
+          dispute = await freelancecontract.disputes(1);
+          totalVoteCount = dispute.totalVoteCount;
+          clientVoteCount = dispute.clientVoteCount;
+          workerVoteCount = dispute.workerVoteCount;
+          expect(totalVoteCount).equal(1);
+          expect(clientVoteCount).equal(0);
+          expect(workerVoteCount).equal(1);
+        });
+
+        it("should change the state of the dispute", async function () {
+          dispute = await freelancecontract.disputes(1);
+          state = dispute.state;
+          expect(state).equal(1);
+          await freelancecontract.connect(jury[0]).vote(1, true);
+          await freelancecontract.connect(jury[1]).vote(1, true);
+          await freelancecontract.connect(jury[2]).vote(1, true);
+          dispute = await freelancecontract.disputes(1);
+          NewState = dispute.state;
+          expect(NewState).equal(2);
+        });
+
+        it("should EMIT DisputeStateChange", async function () {
+          await freelancecontract.connect(jury[0]).vote(1, true);
+          await freelancecontract.connect(jury[1]).vote(1, true);
+          expect(await freelancecontract.connect(jury[2]).vote(1, true))
+            .to.emit(dispute, "DisputeStateChange")
+            .withArgs(1, 2);
+        });
+      });
+
+      // ::::::::::::: UNIT TEST FOR REVEAL RESULT ::::::::::::: //
+
+      describe("🔎 Test function count Vote and change the State ", async function () {
+        beforeEach(async () => {
+          await deployments.fixture(["freelancecontract"]);
+          freelancecontract = await ethers.getContract("freelanceContract");
+          client = accounts[1];
+          await freelancecontract.connect(client).addClient();
+          worker = accounts[2];
+          await freelancecontract.connect(worker).addWorker();
+          // Jurypool
+          for (let i = 3; i < 20; i++) {
+            await freelancecontract.connect(accounts[i]).addJury();
+          }
+          _price = 1;
+          _deadline = 100;
+          _today = 0;
+          title = "title";
+          description = "description";
+          _hash = ethers.utils.keccak256(
+            ethers.utils.toUtf8Bytes(title + description)
+          );
+          await freelancecontract
+            .connect(client)
+            .createContract(_deadline, _today, _hash, { value: _price });
+          await freelancecontract.connect(worker).signContract(1);
           await freelancecontract.connect(client).openDispute(1);
-          // dispute = await freelancecontract.disputes(0);
-          // counter = await freelancecontract.disputeCounter();
-          // Id = dispute.disputeId;
-          // console.log(Id.toString());
-          juryList = await freelancecontract.getDisputeJury(1);
-          // console.log(counter.toString());
-
-          // juryList = juryList.map((jury) => jury.toString());
-          // console.log(juryList);
-          // juryList = dispute.disputeJury(1);
-          // console.log(juryList);
+          await freelancecontract.connect(client).selectJuryMember(1);
+          juryMembers = await freelancecontract.getJuryMembers(1);
         });
 
-        // ::::::::::::: UNIT TEST FOR VOTING PHASE::::::::::::: //
+        it("should change state ClientLostInDispute ", async function () {
+          //get signer from address
+          jury = [];
+          for (let j = 0; j < juryMembers.length; j++) {
+            for (let i = 3; i < 20; i++) {
+              if (accounts[i].address == juryMembers[j]) {
+                await freelancecontract.connect(accounts[i]).vote(1, false);
+              }
+            }
+          }
+          contract = await freelancecontract.contracts(1);
+          expect(contract.state).equal(6);
+          await freelancecontract.revealState(1);
+          contract = await freelancecontract.contracts(1);
+          expect(contract.state).equal(7);
+        });
 
-        // vote // juryCounter // random // randomResult
+        it("should change state WorkerLostInDispute ", async function () {
+          //get signer from address
+          jury = [];
+          for (let j = 0; j < juryMembers.length; j++) {
+            for (let i = 3; i < 20; i++) {
+              if (accounts[i].address == juryMembers[j]) {
+                await freelancecontract.connect(accounts[i]).vote(1, true);
+              }
+            }
+          }
+          contract = await freelancecontract.contracts(1);
+          expect(contract.state).equal(6);
+          await freelancecontract.revealState(1);
+          contract = await freelancecontract.contracts(1);
+          expect(contract.state).equal(8);
+        });
+      });
 
-        // describe("🔎  ", async function () {
-        //   beforeEach(async function () {
-        //     await deployments.fixture(["freelancecontract"]);
-        //     freelancecontract = await ethers.getContract("FreelanceContract");
-        //     client = accounts[1];
-        //     await freelancecontract.connect(client).addClient();
-        //     worker = accounts[2];
-        //     await freelancecontract.connect(worker).addWorker();
-        //     jury_1 = accounts[3];
-        //     await freelancecontract.connect(jury_1).addJury();
-        //     jury_2 = accounts[4];
-        //     await freelancecontract.connect(jury_2).addJury();
-        //     jury_3 = accounts[5];
-        //     await freelancecontract.connect(jury_3).addJury();
-        //     jury_4 = accounts[6];
-        //     await freelancecontract.connect(jury_4).addJury();
-        //     jury_5 = accounts[7];
-        //     await freelancecontract.connect(jury_5).addJury();
-        //     jury_6 = accounts[8];
-        //     await freelancecontract.connect(jury_6).addJury();
-        //     jury_7 = accounts[9];
-        //     await freelancecontract.connect(jury_7).addJury();
-        //     jury_8 = accounts[10];
-        //     await freelancecontract.connect(jury_8).addJury();
-        //     jury_9 = accounts[11];
-        //     await freelancecontract.connect(jury_9).addJury();
-        //     jury_10 = accounts[12];
-        //     await freelancecontract.connect(jury_10).addJury();
-        //     jury_11 = accounts[13];
-        //     await freelancecontract.connect(jury_11).addJury();
-        //     jury_12 = accounts[14];
-        //     await freelancecontract.connect(jury_12).addJury();
-        //     jury_13 = accounts[15];
-        //     await freelancecontract.connect(jury_13).addJury();
-        //     jury_14 = accounts[16];
-        //     await freelancecontract.connect(jury_14).addJury();
-        //     jury_15 = accounts[17];
-        //     await freelancecontract.connect(jury_15).addJury();
-        //     jury_16 = accounts[18];
-        //     await freelancecontract.connect(jury_16).addJury();
-        //     jury_17 = accounts[19];
-        //     await freelancecontract.connect(jury_17).addJury();
-        //     _price = 1;
-        //     _deadline = 100;
-        //     _today = 0;
-        //     title = "title";
-        //     description = "description";
-        //     _hash = ethers.utils.keccak256(
-        //       ethers.utils.toUtf8Bytes(title + description)
-        //     );
-        //     await freelancecontract
-        //       .connect(client)
-        //       .createContract(_deadline, _today, _hash, { value: _price });
-        //     await freelancecontract.connect(worker).signContract(1);
-        //   });
-        // });
+      // ::::::::::::: UNIT TEST FOR PAYMENT ::::::::::::: //
+      // setIsFinishedAndAllowPayment
 
-        // it("should change the state of the dispute", async function () {
-        //   await freelancecontract.connect(worker).openDispute(1);
-        //   dispute = await freelancecontract.disputes(1);
-        //   expect(dispute.state).equal(0);
-        //   await freelancecontract.connect(jury_1).vote(1, true);
-        //   dispute = await freelancecontract.disputes(1);
-        //   expect(dispute.state).equal(1);
-        // });
+      describe("🔎 Unit Test of payments related functions and events when works is confirm by Clients", async function () {
+        beforeEach(async function () {
+          await deployments.fixture(["freelancecontract"]);
+          freelancecontract = await ethers.getContract("freelanceContract");
+          client = accounts[1];
+          await freelancecontract.connect(client).addClient();
+          worker = accounts[2];
+          await freelancecontract.connect(worker).addWorker();
+          // CREATE ARRAY FOR ADD JURORS
+          for (let i = 3; i < 20; i++) {
+            await freelancecontract.connect(accounts[i]).addJury();
+          }
+          _price = 100;
+          _deadline = 30;
+          _today = 0;
+          title = "title";
+          description = "description";
+          _hash = ethers.utils.keccak256(
+            ethers.utils.toUtf8Bytes(title + description)
+          );
+          await freelancecontract
+            .connect(client)
+            .createContract(_deadline, _today, _hash, { value: _price });
+          await freelancecontract.connect(worker).signContract(1);
+        });
 
-        // ::::::::::::: UNIT TEST FOR PAYMENT ::::::::::::: //
-        // setIsFinishedAndAllowPayment
+        it("should Revert as it not in correct state", async function () {
+          await expect(
+            freelancecontract.connect(client).setIsFinishedAndAllowPayment(1)
+          ).to.be.revertedWith("Contract is not in the correct state.");
+        });
 
-        // describe("🔎  ", async function () {
-        //   beforeEach(async function () {
-        //     await deployments.fixture(["freelancecontract"]);
-        //     // freelancecontract = await ethers.getContract("FreelanceContract");
-        //     // await freelancecontract.addClient(accounts[0].address);
-        //     // await freelancecontract.addWorker(accounts[1].address);
-        //   });
-        // });
+        it("should worker requestClientValidation and change contract state to WaitingClientReview ", async function () {
+          contract = await freelancecontract.contracts(1);
+          state = contract.state;
+          expect(state).equal(1);
+          await freelancecontract.connect(worker).requestClientValidation(1);
+          contract = await freelancecontract.contracts(1);
+          NewState = contract.state;
+          expect(NewState).equal(2);
+        });
+
+        it("should NOT allow client to  request client validation", async function () {
+          await expect(
+            freelancecontract.connect(client).requestClientValidation(1)
+          ).to.be.revertedWith("Only the worker can call this function.");
+        });
+
+        it("should client able to confirm worker job and change state to WorkFinishedSuccessufully", async function () {
+          await freelancecontract.connect(worker).requestClientValidation(1);
+          contract = await freelancecontract.contracts(1);
+          await freelancecontract
+            .connect(client)
+            .setIsFinishedAndAllowPayment(1);
+          contract = await freelancecontract.contracts(1);
+          NewState = contract.state;
+          expect(NewState).equal(3);
+        });
+
+        it("should Not allow worker to confirm the job", async function () {
+          await freelancecontract.connect(worker).requestClientValidation(1);
+          contract = await freelancecontract.contracts(1);
+          state = contract.state;
+          expect(state).equal(2);
+          await expect(
+            freelancecontract.connect(worker).setIsFinishedAndAllowPayment(1)
+          ).to.be.revertedWith("Only the client can call this function.");
+        });
+
+        it("should NOT allow client to pull payment", async function () {});
+
+        it("should allow worker to pull payments and not fail", async function () {
+          await freelancecontract.connect(worker).requestClientValidation(1);
+          await freelancecontract
+            .connect(client)
+            .setIsFinishedAndAllowPayment(1);
+          await expect(freelancecontract.connect(worker).pullPayment(1)).to.not
+            .be.reverted;
+        });
+
+        it("should allow client to pull payments after worker cancel", async function () {
+          balance = await client.getBalance();
+          console.log("client balance ", balance.toString() / 1e18);
+          await freelancecontract.connect(worker).cancelContractByWorker(1);
+          await expect(freelancecontract.connect(client).pullPayment(1)).to.not
+            .be.reverted;
+          Newbalance = await client.getBalance();
+          console.log("client balance ", Newbalance.toString() / 1e18);
+        });
+
+        // it("should EMIT DisputeStateChange", async function () {});
+
+        // it("should REVEAL the result of the dispute", async function () {});
+      });
+
+      describe("🔎 Unit Test of payments related functions and events after dispute opened ", async function () {
+        beforeEach(async function () {
+          await deployments.fixture(["freelancecontract"]);
+          freelancecontract = await ethers.getContract("freelanceContract");
+          client = accounts[1];
+          await freelancecontract.connect(client).addClient();
+          worker = accounts[2];
+          await freelancecontract.connect(worker).addWorker();
+          // CREATE ARRAY FOR ADD JURORS
+          for (let i = 3; i < 20; i++) {
+            await freelancecontract.connect(accounts[i]).addJury();
+          }
+          _price = 10;
+          _deadline = 100;
+          _today = 0;
+          title = "title";
+          description = "description";
+          _hash = ethers.utils.keccak256(
+            ethers.utils.toUtf8Bytes(title + description)
+          );
+          await freelancecontract
+            .connect(client)
+            .createContract(_deadline, _today, _hash, { value: _price });
+          await freelancecontract.connect(worker).signContract(1);
+          await freelancecontract.connect(client).openDispute(1);
+          await freelancecontract.connect(client).selectJuryMember(1);
+          juryMembers = await freelancecontract.getJuryMembers(1);
+        });
+
+        it("should Revert as Dispute isn't closed", async function () {
+          await expect(
+            freelancecontract.connect(client).setIsFinishedAndAllowPayment(1)
+          ).to.be.revertedWith("Contract is not in the correct state.");
+        });
+
+        it("should NOT allow client to pull payment", async function () {
+          // client pull payment
+          await expect(
+            freelancecontract.connect(client).pullPayment(1)
+          ).to.be.revertedWith("No allowed to pull payment");
+        });
+
+        it("should Allow client to pull payment when Won dispute", async function () {
+          //get signer from address
+          jury = [];
+          for (let j = 0; j < juryMembers.length; j++) {
+            for (let i = 3; i < 20; i++) {
+              if (accounts[i].address == juryMembers[j]) {
+                await freelancecontract.connect(accounts[i]).vote(1, true);
+              }
+            }
+          }
+          await freelancecontract.revealState(1);
+          balance = await ethers.provider.getBalance(client.address);
+          console.log(balance.toString() / 1000000000000);
+          // client pull payment
+          await expect(freelancecontract.connect(client).pullPayment(1)).to.not
+            .be.reverted;
+          balance_2 = await ethers.provider.getBalance(client.address);
+          console.log(balance_2.toString() / 1000000000000);
+        });
+
+        it("should Allow worker to pull payment", async function () {
+          //get signer from address
+          jury = [];
+          for (let j = 0; j < juryMembers.length; j++) {
+            for (let i = 3; i < 20; i++) {
+              if (accounts[i].address == juryMembers[j]) {
+                await freelancecontract.connect(accounts[i]).vote(1, false);
+              }
+            }
+          }
+          await freelancecontract.revealState(1);
+          // client pull payment
+          await freelancecontract.connect(worker).pullPayment(1);
+        });
+
+        // it("should EMIT Payment", async function () {});
+
+        // it("should REVEAL the result of the dispute", async function () {});
       });
     });
+
+// it("should allow worker to pull payment and increase the balance 100 Ethers", async function () {
+//   //get contract prime
+//   balance_inital = await ethers.provider.getBalance(worker.address);
+//   console.log(balance_inital.toString() / 1000000000000000000);
+//   await freelancecontract.connect(worker).requestClientValidation(1);
+//   await freelancecontract
+//     .connect(client)
+//     .setIsFinishedAndAllowPayment(1);
+//   const transactionResponse = await freelancecontract
+//     .connect(worker)
+//     .pullPayment(1);
+//   const transactionReceipt = await transactionResponse.wait();
+//   console.log(transactionReceipt);
+//   // const { gasUsed, effectiveGasPrice } = transactionReceipt;
+//   // const gasCost = gasUsed.mul(effectiveGasPrice);
+//   // const _amount = _price * 0.95; // 5% fee
+//   Newbalance = await ethers.provider.getBalance(worker.address);
+//   console.log(Newbalance.toString() / 1000000000000000000);
+//   // expect(Newbalance).equal(balance_inital.add(_amount).sub(gasCost));
+//   // balance = await ethers.provider.getBalance(worker.address);
+//   // console.log(balance.toString() / 1000000000000000000);
+//   // delta = balance_inital.sub(Newbalance, gasCost);
+//   //expect(balance).equal(balance_init.add(_price));
+// });

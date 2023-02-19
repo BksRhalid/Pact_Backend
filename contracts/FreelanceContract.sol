@@ -3,28 +3,37 @@ pragma solidity 0.8.18;
 
 import "./utils/randomNumber.sol";
 
-contract FreelanceContract is randomNumber {
+// import "./utils/admin.sol";
+
+contract freelanceContract is randomNumber {
     // State variables
 
     struct ContractPact {
-        address client; // client address
-        address worker; // worker address
+        address payable client; // client address
+        address payable worker; // worker address
         bytes32 hashJob; // title + description of the work - should be a hash
         uint256 deadline; // timestamp
         uint256 createAt; // timestamp
         uint256 price; // price of the work in wei
         ContractState state; // state of the contract
+        uint256 disputeId; // dispute id
     }
 
     struct Dispute {
         uint256 disputeId; // dispute id
         uint256 contractId; // contract id
+        uint24 totalVoteCount; // jury vote
+        uint24 clientVoteCount; // client vote count private until reveal
+        uint24 workerVoteCount; // worker vote count private until reveal
         address disputeInitiator; // dispute initiator
-        uint256 totalVoteCount; // jury vote
-        uint256 clientVoteCount; // client vote count
-        uint256 workerVoteCount; // worker vote count
-        mapping(address => bool) disputeJury; // jury address => jury vote
+        juryMember[] juryMembers; // jury address => jury hasVoted
         DisputeState state;
+    }
+
+    struct juryMember {
+        uint24 juryId; // jury id
+        bool hasVoted; // jury vote
+        address payable juryAddress; // jury address
     }
 
     // Mappings
@@ -45,22 +54,44 @@ contract FreelanceContract is randomNumber {
         WaitingClientReview,
         WorkFinishedSuccessufully,
         DisputeOpened,
+        WaitingforJuryVote,
+        DisputeClosed,
         ClientLostInDispute,
         WorkerLostInDispute,
-        DisputeClosed,
         CancelByFreelancer,
         CancelByClient,
         Archived
     }
     enum DisputeState {
+        WaitingForJurySelection,
         WaitingJuryVote,
+        DisputeClosed,
         ClientWon,
-        WorkerWon,
-        DisputeClosed
+        WorkerWon
     }
+    // reveal won or lost in dispute after jury vote completed (if jury vote is 50% or more)
 
     ContractState[] public contractStates; // array of contract states - could be used to display contract states in the frontend
     DisputeState[] public disputeStates; // array of contract states - could be used to display contract states in the frontend
+
+    uint24 public juryLength; // jury length
+    // protocol fee
+    uint8 public protocolFee; // 5% of the contract price
+    uint8 public juryFee; // 5% of the contract price
+    address payable protocolAddress; // protocol address
+
+    // import from admin constructor
+
+    constructor(
+        uint8 _protocolFee,
+        uint8 _juryFee,
+        uint24 _juryLength
+    ) {
+        protocolAddress = payable(msg.sender);
+        protocolFee = _protocolFee;
+        juryFee = _juryFee;
+        juryLength = _juryLength;
+    }
 
     // Events
 
@@ -100,7 +131,7 @@ contract FreelanceContract is randomNumber {
     // Event to display work is validated by client
     event ContractIsFinished(uint256 contractId);
 
-    event JuryVote(uint256 disputeId);
+    event Voted(uint256 disputeId, address juryAddress);
 
     // Modifiers
 
@@ -148,14 +179,7 @@ contract FreelanceContract is randomNumber {
     }
 
     // TODO : add modifier to check only jury of the dispute can call the function
-
-    modifier onlyJury(uint256 _disputeId) {
-        require(
-            disputes[_disputeId].disputeJury[msg.sender] == true,
-            "Only the jury can call this function."
-        );
-        _;
-    }
+    // if disputes[_disputeId].juryMembers[msg.sender] exists, then onlyJury
 
     // Functions
 
@@ -179,10 +203,8 @@ contract FreelanceContract is randomNumber {
 
     function addJury() external {
         require(msg.sender != address(0), "Invalid address.");
-        // have to be a worker or client before to apply to be a jury
-
+        require(isJury(msg.sender) == false, "Jury already exists.");
         // add a new jury of juryPool
-
         juryCounter++;
         juryPool[juryCounter] = msg.sender;
     }
@@ -203,6 +225,15 @@ contract FreelanceContract is randomNumber {
         }
     }
 
+    function isJury(address _address) public view returns (bool) {
+        for (uint256 i = 0; i < juryCounter; i++) {
+            if (juryPool[i] == _address) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     // Function to create a new contract send by client
     function createContract(
         uint256 _deadline,
@@ -213,15 +244,17 @@ contract FreelanceContract is randomNumber {
             clients[msg.sender] == true,
             "Only client can create a contract."
         );
+        require(msg.value > 0, "The price must be greater than 0.");
         contractCounter++;
         contracts[contractCounter] = ContractPact({
-            client: msg.sender,
-            worker: address(0),
+            client: payable(msg.sender),
+            worker: payable(address(0)),
             hashJob: _hash,
             createAt: _today,
             deadline: _deadline,
             price: msg.value,
-            state: ContractState.WaitingWorkerSign
+            state: ContractState.WaitingWorkerSign,
+            disputeId: 0
         });
 
         emit ContractCreated(
@@ -281,7 +314,7 @@ contract FreelanceContract is randomNumber {
             "The contract has already been signed."
         );
 
-        thisContract.worker = msg.sender;
+        thisContract.worker = payable(msg.sender);
         thisContract.state = ContractState.WorkStarted;
 
         emit ContractSigned(_contractId, msg.sender);
@@ -341,15 +374,13 @@ contract FreelanceContract is randomNumber {
         emit ContractIsFinished(_contractId);
     }
 
-    // Function for the client or worker to open a dispute
     function openDispute(uint256 _contractId)
         external
         inState(_contractId, ContractState.WorkStarted)
         onlyClientOrWorker(_contractId)
     {
-        // revert not enought jury in juryPool
         require(
-            juryCounter >= 12,
+            juryCounter > juryLength,
             "Not enough jury in juryPool to open a dispute."
         );
         ContractPact storage thisContract = contracts[_contractId];
@@ -359,57 +390,178 @@ contract FreelanceContract is randomNumber {
             ContractState.DisputeOpened
         );
 
-        // create a new dispute
         disputeCounter++;
         Dispute storage thisDispute = disputes[disputeCounter];
+
+        // create an array address(0) of jury member with juryLength
+        // initialize the jury members struct array
+        // struct juryMember
+
+        // juryMember memory jury;
+
+        // for (uint24 i = 0; i <= juryLength; i++) {
+        //     jury = juryMember({
+        //         juryId: i,
+        //         juryAddress: payable(address(0)),
+        //         hasVoted: false
+        //     });
+        //     thisDispute.juryMembers.push(jury);
+        // }
+
         thisDispute.contractId = _contractId;
         thisDispute.disputeInitiator = msg.sender;
         thisDispute.state = DisputeState.WaitingJuryVote;
+        thisContract.disputeId = disputeCounter;
+
+        emit DisputeCreated(disputeCounter, _contractId, msg.sender);
+    }
+
+    // only the initiator can launch the jury selection
+    // only if not already selected
+    function selectJuryMember(uint256 _contractId) external {
+        // address[] memory selectedJurors = new address[](juryLength);
+        address[3] memory selectedJurors;
+
+        ContractPact storage thisContract = contracts[_contractId];
+        Dispute storage _thisDispute = disputes[thisContract.disputeId];
 
         // select a jury member
-        uint256 juryIndex = 0;
+        juryMember memory jury;
 
-        for (uint256 i = 0; i < 6; i++) {
-            uint256 randomIndex = random();
-            randomIndex = randomIndex % juryCounter;
-            address jurySelected = juryPool[randomIndex];
-            // address jurySelected = juryPool[juryIndex].juryAddress;
+        address jurySelected = msg.sender;
+        for (uint24 i = 0; i < juryLength; i++) {
+            uint24 _seed = i;
+            // uint256 randomIndex = random(_seed);
+            // randomIndex = randomIndex % juryCounter;
+            jurySelected = generateRandomJury(_contractId, _seed);
+            bool selected = false;
+            for (uint24 count = 0; count < selectedJurors.length; count++) {
+                if (jurySelected == selectedJurors[i]) {
+                    selected = true;
+                    break;
+                }
+                selected = false;
+            }
             if (
-                jurySelected != thisContract.client &&
-                jurySelected != thisContract.worker
+                _thisDispute.juryMembers.length < juryLength &&
+                selected == false
             ) {
-                thisDispute.disputeJury[jurySelected] = true;
-                juryIndex++;
+                selectedJurors[i] = jurySelected;
+                jury = juryMember({
+                    juryId: i,
+                    juryAddress: payable(jurySelected),
+                    hasVoted: false
+                });
+                _thisDispute.juryMembers.push(jury);
             } else {
                 i--;
+                continue;
             }
         }
-        // event a new dispute
-        emit DisputeCreated(disputeCounter, _contractId, msg.sender);
+        thisContract.state = ContractState.WaitingforJuryVote;
+        emit ContractStateChange(
+            ContractState.DisputeOpened,
+            ContractState.WaitingforJuryVote
+        );
+        _thisDispute.state = DisputeState.WaitingJuryVote;
         emit DisputeStateChange(
             DisputeState.WaitingJuryVote,
             DisputeState.WaitingJuryVote
         );
     }
 
-    // Function to get the disputeJury list of a dispute
-
-    function getDisputeJury(uint256 _disputeId)
-        external
+    function generateRandomJury(uint256 _contractId, uint256 _seed)
+        internal
         view
-        returns (address[] memory juryList)
+        returns (address)
     {
-        Dispute storage thisDispute = disputes[_disputeId];
-        juryList = new address[](12);
-        uint256 index = 0;
-        //get adress mapping
-        for (uint256 i = 0; i < juryCounter; i++) {
-            if (thisDispute.disputeJury[juryPool[i]] == false) {
-                juryList[index] = juryPool[i];
-                index++;
+        ContractPact storage thisContract = contracts[_contractId];
+        address jurySelected = msg.sender;
+        uint256 randomIndex;
+        for (uint256 i = 0; i <= 3; i++) {
+            uint256 randomSeed = uint256(
+                keccak256(
+                    abi.encodePacked(
+                        jurySelected,
+                        block.timestamp,
+                        block.number,
+                        _seed,
+                        i
+                    )
+                )
+            );
+            randomIndex = random(randomSeed) % juryCounter;
+            jurySelected = juryPool[randomIndex];
+            if (
+                jurySelected != address(0) &&
+                jurySelected != thisContract.client &&
+                jurySelected != thisContract.worker
+            ) {
+                break;
             }
         }
-        return juryList;
+        return jurySelected;
+    }
+
+    // Function to get check if jury is in the Dispute
+
+    // function isNotAlreadySelected(
+    //     address _jurySelected,
+    //     address[3] storage _selectedJurors
+    // ) internal pure returns (bool) {
+    //     for (uint256 i = 0; i < _selectedJurors.length; i++) {
+    //         if (_jurySelected == _selectedJurors[i]) {
+    //             return true;
+    //         }
+    //     }
+    //     return false;
+    // }
+
+    function isJuryInDispute(uint256 _disputeId, address _juryAddress)
+        external
+        view
+        returns (bool)
+    {
+        Dispute storage thisDispute = disputes[_disputeId];
+        for (uint256 i = 0; i < thisDispute.juryMembers.length; i++) {
+            if (thisDispute.juryMembers[i].juryAddress == _juryAddress) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    function getJuryMembers(uint256 _disputeId)
+        external
+        view
+        returns (address[] memory)
+    {
+        Dispute storage thisDispute = disputes[_disputeId];
+        address[] memory juryMembers = new address[](
+            thisDispute.juryMembers.length
+        );
+        for (uint256 i = 0; i < thisDispute.juryMembers.length; i++) {
+            juryMembers[i] = thisDispute.juryMembers[i].juryAddress;
+        }
+        return juryMembers;
+    }
+
+    function hasVoted(uint256 _disputeId, address _juryAddress)
+        external
+        view
+        returns (bool)
+    {
+        Dispute storage thisDispute = disputes[_disputeId];
+        bool result = false;
+        for (uint256 i = 0; i < thisDispute.juryMembers.length; i++) {
+            if (
+                thisDispute.juryMembers[i].juryAddress == _juryAddress &&
+                thisDispute.juryMembers[i].hasVoted == true
+            ) {
+                result = true;
+            }
+        }
+        return result;
     }
 
     // Function for the jury to vote for the dispute between the client and the worker
@@ -419,44 +571,217 @@ contract FreelanceContract is randomNumber {
         inStateDispute(_disputeId, DisputeState.WaitingJuryVote)
     {
         Dispute storage thisDispute = disputes[_disputeId];
-
-        // get the jury member
-
         require(
             thisDispute.state == DisputeState.WaitingJuryVote,
             "The dispute is already closed."
         );
+
+        uint256 _contractId = thisDispute.contractId;
+        ContractPact storage thisContract = contracts[_contractId];
+
+        // get the jury member id in the disput
+        uint24 juryId = 0;
+        uint256 juryMemberLength = thisDispute.juryMembers.length;
+        for (uint24 i = 0; i < juryMemberLength; i++) {
+            if (thisDispute.juryMembers[i].juryAddress == msg.sender) {
+                juryId = i;
+            }
+        }
+        //"The jury member has already voted."
         require(
-            thisDispute.disputeJury[msg.sender] == false,
+            thisDispute.juryMembers[juryId].hasVoted == false,
             "The jury member has already voted."
         );
-        thisDispute.disputeJury[msg.sender] == true;
+
+        thisDispute.juryMembers[juryId].hasVoted = true;
         thisDispute.totalVoteCount++;
         if (_vote) {
             thisDispute.clientVoteCount++;
         } else {
             thisDispute.workerVoteCount++;
         }
-        emit JuryVote(_disputeId);
-        if (thisDispute.totalVoteCount == 12) {
+        emit Voted(_disputeId, msg.sender);
+
+        // // Check if all jury members have voted and return true if they have
+        // uint256 voteCount = 0;
+        // for (uint256 i = 0; i < juryMemberLength; i++) {
+        //     if (thisDispute.juryMembers[i].hasVoted == true) {
+        //         voteCount++;
+        //     }
+        //}
+
+        // replate TotalVoteCount by voteCount due to issue with the jury members
+        if (thisDispute.totalVoteCount == juryMemberLength) {
+            thisContract.state = ContractState.DisputeClosed;
+            emit ContractStateChange(
+                ContractState.WaitingforJuryVote,
+                ContractState.DisputeClosed
+            );
             thisDispute.state = DisputeState.DisputeClosed;
             emit DisputeStateChange(
                 DisputeState.WaitingJuryVote,
                 DisputeState.DisputeClosed
             );
-            if (thisDispute.clientVoteCount > thisDispute.workerVoteCount) {
-                ContractPact storage thisContract = contracts[
-                    thisDispute.contractId
-                ];
-                thisContract.state = ContractState.WorkerLostInDispute;
-                emit ContractIsFinished(thisDispute.contractId);
-            } else {
-                ContractPact storage thisContract = contracts[
-                    thisDispute.contractId
-                ];
-                thisContract.state = ContractState.ClientLostInDispute;
-                emit ContractIsFinished(thisDispute.contractId);
+        }
+    }
+
+    // Function to reveal and count the vote of the jury
+
+    function revealState(uint256 _disputeId)
+        external
+        inStateDispute(_disputeId, DisputeState.DisputeClosed)
+    {
+        Dispute storage thisDispute = disputes[_disputeId];
+        uint256 _contractId = thisDispute.contractId;
+        ContractPact storage thisContract = contracts[_contractId];
+
+        if (thisDispute.clientVoteCount > thisDispute.workerVoteCount) {
+            thisContract.state = ContractState.WorkerLostInDispute;
+            thisDispute.state = DisputeState.ClientWon;
+            emit ContractIsFinished(_contractId);
+            emit ContractStateChange(
+                ContractState.DisputeClosed,
+                ContractState.WorkerLostInDispute
+            );
+            emit DisputeStateChange(
+                DisputeState.DisputeClosed,
+                DisputeState.ClientWon
+            );
+        } else {
+            thisContract.state = ContractState.ClientLostInDispute;
+            thisDispute.state = DisputeState.WorkerWon;
+            emit ContractIsFinished(_contractId);
+            emit ContractStateChange(
+                ContractState.DisputeClosed,
+                ContractState.ClientLostInDispute
+            );
+            emit DisputeStateChange(
+                DisputeState.DisputeClosed,
+                DisputeState.WorkerWon
+            );
+        }
+    }
+
+    // Function for client or worker to pull payment and split if juryDispute with jury Members and protocol share and the worker if he won the dispute
+    //should call payment function with constructor(address[] memory payees, uint256[] memory shares)
+
+    function pullPayment(uint256 _contractId)
+        external
+        onlyClientOrWorker(_contractId)
+    {
+        ContractPact storage thisContract = contracts[_contractId];
+        // amount in wei
+        uint256 amount = thisContract.price;
+        uint256 _disputeId = thisContract.disputeId;
+
+        // if there is no dispute
+        // if the job have been canceled by the client or freelance
+        if (
+            thisContract.state == ContractState.CancelByFreelancer ||
+            thisContract.state == ContractState.CancelByClient
+        ) {
+            address payable clientAddress = thisContract.client;
+            thisContract.state = ContractState.Archived;
+            thisContract.price = 0;
+            (bool success, ) = clientAddress.call{value: amount}("");
+            require(success, "Transfer failed.");
+        }
+        // if the job is finished successfully
+        else if (
+            thisContract.state == ContractState.WorkFinishedSuccessufully
+        ) {
+            address WinnerAddress = thisContract.worker;
+            uint256 WinnerShare = amount * (1 - (protocolFee / 100));
+            // protocol address and share
+            address[] memory payees = new address[](2);
+            payees[0] = WinnerAddress;
+            payees[1] = protocolAddress;
+            uint256[] memory shares = new uint256[](2);
+            shares[0] = WinnerShare;
+            shares[1] = amount * (protocolFee / 100);
+
+            // Update state and price
+            thisContract.state = ContractState.Archived;
+            thisContract.price = 0;
+            // create a new payment
+            // PaymentSplitter payment = new PaymentSplitter(payees, shares);
+            // transfer the amount to the payment contract
+            // create a payment
+            for (uint256 i = 0; i < payees.length; i++) {
+                (bool success, ) = payees[i].call{value: shares[i]}("");
+                require(success, "Transfer failed.");
             }
         }
+        //if dispute existe and the client or worker lost the dispute
+        // As dispute finished split payment between jurors, protocol and who wants
+        else if (thisContract.state == ContractState.ClientLostInDispute) {
+            Dispute storage thisDispute = disputes[_disputeId];
+            uint256 juryMemberLength = thisDispute.juryMembers.length;
+            address[] memory payees = new address[](juryMemberLength + 2);
+            uint256[] memory shares = new uint256[](juryMemberLength + 2);
+
+            // Update state and price
+            thisContract.state = ContractState.Archived;
+            thisContract.price = 0;
+
+            // get jury members address and share
+
+            address WinnerAddress = thisContract.worker;
+            uint256 JuryShare = ((juryFee / juryMemberLength) * amount) / 100;
+            uint256 ProtocolShare = amount * (protocolFee / 100);
+            uint256 WinnerShare = amount - JuryShare - ProtocolShare;
+
+            payees[0] = WinnerAddress;
+            shares[0] = WinnerShare;
+            payees[1] = protocolAddress;
+            shares[1] = ProtocolShare;
+            for (uint256 i = 0; i < juryMemberLength; i++) {
+                payees[i + 2] = thisDispute.juryMembers[i].juryAddress;
+                shares[i + 2] = amount * (juryFee / juryMemberLength / 100);
+            }
+            // create a payment
+            for (uint256 i = 0; i < payees.length; i++) {
+                (bool success, ) = payees[i].call{value: shares[i]}("");
+                require(success, "Transfer failed.");
+            }
+        } else if (thisContract.state == ContractState.WorkerLostInDispute) {
+            // jury members address and share
+            Dispute storage thisDispute = disputes[_disputeId];
+            uint256 juryMemberLength = thisDispute.juryMembers.length;
+            address[] memory payees = new address[](juryMemberLength + 2);
+            uint256[] memory shares = new uint256[](juryMemberLength + 2);
+
+            // Update state and price
+            thisContract.state = ContractState.Archived;
+            thisContract.price = 0;
+
+            // get jury members address and share
+            address WinnerAddress = thisContract.client;
+            uint256 JuryShare = ((juryFee / juryMemberLength) * amount) / 100;
+            uint256 ProtocolShare = amount * (protocolFee / 100);
+            uint256 WinnerShare = amount - JuryShare - ProtocolShare;
+
+            payees[0] = WinnerAddress;
+            shares[0] = WinnerShare;
+            payees[1] = protocolAddress;
+            shares[1] = amount * (protocolFee / 100);
+            for (uint256 i = 0; i < juryMemberLength; i++) {
+                payees[i + 2] = thisDispute.juryMembers[i].juryAddress;
+                shares[i + 2] = (amount * (juryFee / juryMemberLength)) / 100;
+            }
+            // create a payment
+            for (uint256 i = 0; i < payees.length; i++) {
+                (bool success, ) = payees[i].call{value: shares[i]}("");
+                require(success, "Transfer failed.");
+            }
+        } else {
+            revert("No allowed to pull payment");
+        }
+        // transfer the payment to the contract
+        //payment.transfer(amount); // <--- this is the line that fails
+        // delete the contract
+        // delete contracts[_contractId];
+
+        // emit PaymentReleased(_contractId, amount);
     }
 }

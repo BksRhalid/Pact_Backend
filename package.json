@@ -23,6 +23,7 @@
     "typechain": "^8.1.0"
   },
   "dependencies": {
+    "@chainlink/contracts": "^0.6.1",
     "dotenv": "^16.0.3",
     "hardhat-deploy": "^0.11.22"
   }
