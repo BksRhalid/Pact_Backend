@@ -7,7 +7,7 @@ abstract contract randomNumber {
     //     return block.prevrandao;
     // }
 
-    function random(uint24 _seed) public view returns (uint256) {
+    function random(uint256 _seed) public view returns (uint256) {
         uint256 result = uint256(
             keccak256(
                 abi.encodePacked(block.timestamp, block.prevrandao, _seed)
