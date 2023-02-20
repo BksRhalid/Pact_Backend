@@ -382,7 +382,7 @@ contract freelanceContract is randomNumber, Ownable {
     // only if not already selected
     function selectJuryMember(uint256 _contractId) external {
         // address[] memory selectedJurors = new address[](juryLength);
-        address[3] memory selectedJurors;
+        address[] memory selectedJurors = new address[](juryLength);
 
         ContractPact storage thisContract = contracts[_contractId];
         Dispute storage _thisDispute = disputes[thisContract.disputeId];
@@ -404,11 +404,15 @@ contract freelanceContract is randomNumber, Ownable {
                 }
                 selected = false;
             }
+            // check if juryselected is already selected in mapping
+            // bool selected = selectedJurors[jurySelected];
+
             if (
                 _thisDispute.juryMembers.length < juryLength &&
                 selected == false
             ) {
-                selectedJurors[i] = jurySelected;
+                // selectedJurors[i] = jurySelected;
+                // selectedJurors[jurySelected] = true;
                 jury = juryMember({
                     juryId: i,
                     juryAddress: payable(jurySelected),
@@ -427,7 +431,7 @@ contract freelanceContract is randomNumber, Ownable {
         );
     }
 
-    function generateRandomJury(uint256 _contractId, uint256 _seed)
+    function generateRandomJury(uint256 _contractId, uint24 _seed)
         internal
         view
         returns (address)
@@ -435,19 +439,8 @@ contract freelanceContract is randomNumber, Ownable {
         ContractPact storage thisContract = contracts[_contractId];
         address jurySelected = msg.sender;
         uint256 randomIndex;
-        for (uint256 i = 0; i <= 3; i++) {
-            uint256 randomSeed = uint256(
-                keccak256(
-                    abi.encodePacked(
-                        jurySelected,
-                        block.timestamp,
-                        block.number,
-                        _seed,
-                        i
-                    )
-                )
-            );
-            randomIndex = random(randomSeed) % juryCounter;
+        for (uint8 i = 0; i <= 3; i++) {
+            randomIndex = random(_seed) % juryCounter;
             jurySelected = juryPool[randomIndex];
             if (
                 jurySelected != address(0) &&
