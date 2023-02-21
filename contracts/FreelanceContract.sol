@@ -4,9 +4,12 @@ pragma solidity 0.8.18;
 import "./utils/randomNumber.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 
+// Contract to create a freelance contract
+// @author: RhalidBks
+// @date: 2023-02-08
+// @version: 0.1.0
 contract freelanceContract is randomNumber, Ownable {
     // State variables
-
     uint24 public juryLength; // jury length
     // protocol fee
     uint8 public protocolFee; // 5% of the contract price
