@@ -4,10 +4,20 @@ pragma solidity 0.8.18;
 import "./utils/randomNumber.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 
+// import "./utils/payments.sol"; // to be added later with openzeppelin payment splitter
+
 // Contract to create a freelance contract
-// @author: RhalidBks
-// @date: 2023-02-08
-// @version: 0.1.0
+
+/**
+ * @title ContractPact
+ * @dev This contract provides a simple workflow for a client to hire a worker to perform a task,
+ *      and allows the worker to sign the contract, start working, request client validation,
+ *      and for the client to validate the work and allow payment. The client can also cancel the
+ *      contract before the worker signs, and the worker can cancel the contract at any time.
+ *      If a dispute arises, the client or worker can open a dispute and a jury will be selected
+ *      to resolve the dispute.
+ * @author: RhalidBks
+ */
 contract freelanceContract is randomNumber, Ownable {
     // State variables
     uint24 public juryLength; // jury length
@@ -16,7 +26,12 @@ contract freelanceContract is randomNumber, Ownable {
     uint8 public juryFee; // 5% of the contract price
     address payable protocolAddress; // protocol address
 
-    // admin constructor
+    /**
+     * @dev Constructor to set the protocol and jury fees, as well as the jury length
+     * @param _protocolFee The protocol fee percentage
+     * @param _juryFee The jury fee percentage
+     * @param _juryLength The length of time for the jury vote
+     */
     constructor(
         uint8 _protocolFee,
         uint8 _juryFee,
@@ -133,59 +148,89 @@ contract freelanceContract is randomNumber, Ownable {
 
     // Functions admin
 
+    /**
+     * @dev Function to set the protocol fee percentage.
+     * @notice Only the owner of the contract can call this function.
+     * @param _protocolFee The new protocol fee percentage to be set.
+     */
     function setProtocolFee(uint8 _protocolFee) public onlyOwner {
         protocolFee = _protocolFee;
     }
 
+    /**
+     * @dev Function to set the jury fee percentage.
+     * @notice Only the owner of the contract can call this function.
+     * @param _juryFee The new jury fee percentage to be set.
+     */
     function setJuryFee(uint8 _juryFee) public onlyOwner {
         juryFee = _juryFee;
     }
 
+    /**
+     * @dev Function to set the length of time in days that a jury member can vote in a dispute.
+     * @notice Only the owner of the contract can call this function.
+     * @param _juryLength The new length of time in days to be set.
+     */
     function setJuryLength(uint8 _juryLength) public onlyOwner {
         juryLength = _juryLength;
     }
 
-    // Function to add a worker to the workers mapping
-
+    /**
+     * @dev Add a new worker to the workers mapping.
+     * @notice Caller should be a non-zero addresses and the worker doesn't already exist.
+     */
     function addWorker() external {
         require(msg.sender != address(0), "Invalid address.");
         require(workers[msg.sender] == false, "Worker already exists.");
         workers[msg.sender] = true;
     }
 
-    // Function to add a client to the clients mapping
-
+    /**
+     * @dev Add a new client to the clients mapping.
+     * @notice Caller should be a non-zero addresses and the client doesn't already exist.
+     */
     function addClient() external {
         require(msg.sender != address(0), "Invalid address.");
         require(clients[msg.sender] == false, "Client already exists.");
         clients[msg.sender] = true;
     }
 
-    // Function to add a jury to the clients mapping
-
+    /**
+     * @dev Add a new jury to the juryPool mapping.
+     * @notice Caller should be a non-zero addresses
+     * Increments the juryCounter, and adds the sender to the juryPool with the new jury ID.
+     */
     function addJury() external {
         require(msg.sender != address(0), "Invalid address.");
-        require(isJury(msg.sender) == false, "Jury already exists.");
         // add a new jury of juryPool
         juryCounter++;
         juryPool[juryCounter] = msg.sender;
     }
 
-    // Function to remove a client from the clients mapping
+    /**
+     * @dev  Function to remove a client from the clients mapping
+     *@notice Caller should be a non-zero addresses and the client already exists.
+     * @notice If the client does not exist, the function will revert.
+     */
     function removeClient() external {
         require(msg.sender != address(0), "Invalid address.");
         require(clients[msg.sender] == true, "Client does not exist.");
         clients[msg.sender] = false;
     }
 
-    // Function to remove a worker from the workers mapping
+    /**
+     * @dev  Function to remove a worker from the workers mapping
+     * @notice If the worker to be removed does not exist in the workers mapping, the function will revert.
+     */
     function removeWorker() external {
         require(msg.sender != address(0), "Invalid address.");
         require(workers[msg.sender] == true, "Worker does not exist.");
         workers[msg.sender] = false;
     }
 
-    // Function to remove a jury from the juryPool mapping
+    /**
+     * @dev Function to remove a jury from the juryPool mapping
+     */
     function removeJury() external {
         require(msg.sender != address(0), "Invalid address.");
         require(isJury(msg.sender) == true, "Jury does not exist.");
@@ -193,13 +238,17 @@ contract freelanceContract is randomNumber, Ownable {
         bool found = false;
         for (uint256 i = 0; i < juryCounter && !found; i++) {
             if (juryPool[i] == msg.sender) {
-                delete juryPool[i];
                 found = true;
+                delete juryPool[i];
             }
         }
         juryCounter--;
     }
 
+    /**
+     * @dev Function to check if the caller is registered as a client
+     * @return a boolean value indicating if the sender is a client (true) or not (false)
+     */
     function isClient() external view returns (bool) {
         if (clients[msg.sender] == true) {
             return true;
@@ -208,6 +257,10 @@ contract freelanceContract is randomNumber, Ownable {
         }
     }
 
+    /**
+     * @dev Function to check if the caller is registered as a worker
+     * @return a boolean value indicating if the sender is a worker (true) or not (false)
+     */
     function isWorker() external view returns (bool) {
         if (workers[msg.sender] == true) {
             return true;
@@ -216,16 +269,28 @@ contract freelanceContract is randomNumber, Ownable {
         }
     }
 
+    /**
+     * @dev Function to check if the caller is registered as a jury
+     * @param _address the address to be checked
+     * @return a boolean value indicating if the sender is a jury (true) or not (false)
+     */
     function isJury(address _address) public view returns (bool) {
-        for (uint256 i = 0; i < juryCounter; i++) {
+        bool stop = false;
+        for (uint256 i = 0; i < juryCounter && !stop; i++) {
             if (juryPool[i] == _address) {
+                stop = true;
                 return true;
             }
         }
         return false;
     }
 
-    // Function to create a new contract send by client
+    /**
+     * @dev Function to create a new contract sent by a client
+     * @param _deadline the deadline for the contract
+     * @param _today the current date
+     * @param _hash the hash of the job bytes32 of title and description
+     */
     function createContract(
         uint256 _deadline,
         uint256 _today,
@@ -249,8 +314,10 @@ contract freelanceContract is randomNumber, Ownable {
         });
     }
 
-    // Function for the client to cancel the contract only if the worker didn't sign the contract
-
+    /**
+     * @dev Allows the client to cancel the contract only if the worker didn't sign the contract yet.
+     * @param _contractId The ID of the contract to be canceled
+     */
     function cancelContractByClient(uint256 _contractId)
         external
         inState(_contractId, ContractState.WaitingWorkerSign)
@@ -268,8 +335,10 @@ contract freelanceContract is randomNumber, Ownable {
         );
     }
 
-    // Function for the worker to cancel the contract
-
+    /**
+     * @dev Allows the worker to cancel the contract
+     * @param _contractId The ID of the contract to be canceled
+     */
     function cancelContractByWorker(uint256 _contractId)
         external
         inState(_contractId, ContractState.WorkStarted)
@@ -283,7 +352,10 @@ contract freelanceContract is randomNumber, Ownable {
         );
     }
 
-    // Function for the worker to sign the contract
+    /**
+     * @dev Allows the worker to take the job
+     * @param _contractId The ID of the contract to be signed
+     */
     function signContract(uint256 _contractId)
         external
         inState(_contractId, ContractState.WaitingWorkerSign)
@@ -303,31 +375,10 @@ contract freelanceContract is randomNumber, Ownable {
         );
     }
 
-    // Function to get the contract details
-
-    function getContractDetails(uint256 _contractId)
-        external
-        view
-        returns (
-            uint256 contractId,
-            address client,
-            address worker,
-            bytes32 hashJob,
-            uint256 deadline,
-            uint256 price
-        )
-    {
-        ContractPact storage thisContract = contracts[_contractId];
-        contractId = _contractId;
-        client = thisContract.client;
-        worker = thisContract.worker;
-        hashJob = thisContract.hashJob;
-        deadline = thisContract.deadline;
-        price = thisContract.price;
-    }
-
-    // Worker can request client validation
-
+    /**
+     * @dev Allows the worker to request client validation to the client when the work is done
+     * @param _contractId The ID of the contract to be reviewed by the client.
+     */
     function requestClientValidation(uint256 _contractId)
         external
         inState(_contractId, ContractState.WorkStarted)
@@ -341,8 +392,10 @@ contract freelanceContract is randomNumber, Ownable {
         );
     }
 
-    // Function for the client to validate the contract
-
+    /**
+     * @dev Allows the client to validate the work done by the worker
+     * @param _contractId The ID of the contract to be validated
+     */
     function setIsFinishedAndAllowPayment(uint256 _contractId)
         external
         inState(_contractId, ContractState.WaitingClientReview)
@@ -352,6 +405,10 @@ contract freelanceContract is randomNumber, Ownable {
         thisContract.state = ContractState.WorkFinishedSuccessufully;
     }
 
+    /**
+     * @dev Allows the client or worker to open a dispute
+     * @param _contractId The ID of the contract to open a dispute
+     */
     function openDispute(uint256 _contractId)
         external
         onlyClientOrWorker(_contractId)
@@ -381,8 +438,11 @@ contract freelanceContract is randomNumber, Ownable {
         thisContract.disputeId = disputeCounter;
     }
 
-    // only the initiator can launch the jury selection
-    // only if not already selected
+    /**
+     * @notice Selects a jury member for a given contract's dispute
+     * @dev Allows the client or worker to open a dispute
+     * @param _contractId The ID of the contract in dispute
+     */
     function selectJuryMember(uint256 _contractId) external {
         // address[] memory selectedJurors = new address[](juryLength);
         address[] memory selectedJurors = new address[](juryLength);
@@ -434,6 +494,14 @@ contract freelanceContract is randomNumber, Ownable {
         );
     }
 
+    /**
+     * @notice Generates a random jury member from the jury pool, excluding the client and worker of the contract
+     * @dev Uses a given seed value to generate a random index in the jury pool and returns the corresponding address if it is not the client or worker of the contract
+     * @param _contractId The ID of the contract in dispute
+     * @param _seed The seed value to use for random number generation
+     * @return The address of the randomly selected jury member
+     */
+
     function generateRandomJury(uint256 _contractId, uint24 _seed)
         internal
         view
@@ -456,6 +524,12 @@ contract freelanceContract is randomNumber, Ownable {
         return jurySelected;
     }
 
+    /**
+     * @notice Checks if a given address is a member of the jury for a particular dispute
+     * @param _disputeId The ID of the dispute to check
+     * @param _juryAddress The address to check for membership in the dispute's jury
+     * @return true if the address is a member of the dispute's jury, false otherwise
+     */
     function isJuryInDispute(uint256 _disputeId, address _juryAddress)
         external
         view
@@ -470,6 +544,12 @@ contract freelanceContract is randomNumber, Ownable {
         return false;
     }
 
+    /**
+     * @notice Returns the addresses of all the jury members for a given dispute
+     * @param _disputeId The ID of the dispute to get jury members for
+     * @param _juryAddress The address to check for membership in the dispute's jury
+     * @return An array of addresses representing the jury members for the dispute
+     */
     function getJuryMembers(uint256 _disputeId)
         external
         view
@@ -485,6 +565,12 @@ contract freelanceContract is randomNumber, Ownable {
         return juryMembers;
     }
 
+    /**
+     * @notice Checks if a given jury member has voted on a specific dispute
+     * @param _disputeId The ID of the dispute to check
+     * @param _juryAddress The address of the jury member to check for a vote
+     * @return true if the jury member has voted on the dispute, false otherwise
+     */
     function hasVoted(uint256 _disputeId, address _juryAddress)
         external
         view
@@ -505,6 +591,12 @@ contract freelanceContract is randomNumber, Ownable {
 
     // Function for the jury to vote for the dispute between the client and the worker
 
+    /**
+     * @dev This function for the jury to vote for the dispute between the client and the worker
+     * @param _contractId The ID of the contract.
+     * @param _vote The vote of the jury member.
+     * @return A boolean indicating whether the vote was successful.
+     */
     function vote(uint256 _contractId, bool _vote)
         external
         inState(_contractId, ContractState.WaitingforJuryVote)
@@ -542,8 +634,11 @@ contract freelanceContract is randomNumber, Ownable {
         }
     }
 
-    // Function to reveal and count the vote of the jury
-
+    /**
+     * @dev This function reveals the state of a dispute and determines whether the client or the worker won the dispute.
+     * @param _contractId The ID of the contract.
+     * @return A boolean indicating whether the reveal state was successful.
+     */
     function revealState(uint256 _contractId)
         external
         inState(_contractId, ContractState.DisputeClosed)
@@ -566,14 +661,22 @@ contract freelanceContract is randomNumber, Ownable {
         }
     }
 
-    // Function for client or worker to pull payment and split if juryDispute with jury Members and protocol share and the worker if he won the dispute
-    //should call payment function with constructor(address[] memory payees, uint256[] memory shares)
-
+    /**
+     * @dev This function allows the client or worker to pull payment and split if jury dispute with jury Members and protocol share and the worker if he won the dispute.
+     * @param _contractId The ID of the contract.
+     * @return A boolean indicating whether the payment was successful.
+     */
+    //TODO: ADAPT AND USE PAYMENT SPLITTER
     function pullPayment(uint256 _contractId)
         external
         onlyClientOrWorker(_contractId)
     {
         ContractPact storage thisContract = contracts[_contractId];
+        require(
+            thisContract.price > 0,
+            "This job contract balance is equal to zero"
+        );
+
         // amount in wei
         uint256 amount = thisContract.price;
         uint256 _disputeId = thisContract.disputeId;
@@ -607,9 +710,6 @@ contract freelanceContract is randomNumber, Ownable {
             // Update state and price
             thisContract.state = ContractState.Archived;
             thisContract.price = 0;
-            // create a new payment
-            // PaymentSplitter payment = new PaymentSplitter(payees, shares);
-            // transfer the amount to the payment contract
             // create a payment
             for (uint256 i = 0; i < payees.length; i++) {
                 (bool success, ) = payees[i].call{value: shares[i]}("");
@@ -681,11 +781,5 @@ contract freelanceContract is randomNumber, Ownable {
         } else {
             revert("No allowed to pull payment");
         }
-        // transfer the payment to the contract
-        //payment.transfer(amount); // <--- this is the line that fails
-        // delete the contract
-        // delete contracts[_contractId];
-
-        // emit PaymentReleased(_contractId, amount);
     }
 }

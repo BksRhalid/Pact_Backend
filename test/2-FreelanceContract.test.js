@@ -35,8 +35,12 @@ const { developmentChains } = require("../helper-hardhat-config");
         it("should ADD a new worker", async function () {
           expect(await freelancecontract.workers(accounts[1].address)).to.be
             .false;
+          expect(await freelancecontract.connect(accounts[1]).isWorker()).to.be
+            .false;
           await freelancecontract.connect(accounts[1]).addWorker();
           expect(await freelancecontract.workers(accounts[1].address)).to.be
+            .true;
+          expect(await freelancecontract.connect(accounts[1]).isWorker()).to.be
             .true;
         });
         it("should REMOVE the worker", async function () {
@@ -48,6 +52,10 @@ const { developmentChains } = require("../helper-hardhat-config");
           await freelancecontract.connect(accounts[1]).removeWorker();
           expect(await freelancecontract.workers(accounts[1].address)).to.be
             .false;
+          await freelancecontract.connect(accounts[1]).addWorker();
+          await expect(
+            freelancecontract.connect(accounts[1]).addWorker()
+          ).to.be.revertedWith("Worker already exists.");
         });
         // Test addClient
         it("should ADD a new client", async function () {
@@ -55,6 +63,8 @@ const { developmentChains } = require("../helper-hardhat-config");
             .false;
           await freelancecontract.connect(accounts[1]).addClient();
           expect(await freelancecontract.clients(accounts[1].address)).to.be
+            .true;
+          expect(await freelancecontract.connect(accounts[1]).isClient()).to.be
             .true;
         });
         it("should REMOVE the client", async function () {
@@ -66,12 +76,20 @@ const { developmentChains } = require("../helper-hardhat-config");
           await freelancecontract.connect(accounts[1]).removeClient();
           expect(await freelancecontract.clients(accounts[1].address)).to.be
             .false;
-        });
+          // isClient should return false
+          expect(await freelancecontract.connect(accounts[1]).isClient()).to.be
+            .false;
 
+          await freelancecontract.connect(accounts[1]).addClient();
+          await expect(
+            freelancecontract.connect(accounts[1]).addClient()
+          ).to.be.revertedWith("Client already exists.");
+        });
         // Test addJury
         it("should ADD a new jury member", async function () {
-          // should be equal to address 0x0000000
           expect(await freelancecontract.juryPool(1)).equal(addressZero);
+          expect(await freelancecontract.isJury(accounts[1].address)).to.be
+            .false;
           await freelancecontract.connect(accounts[1]).addJury();
           expect(await freelancecontract.juryPool(1)).equal(
             accounts[1].address
@@ -80,6 +98,48 @@ const { developmentChains } = require("../helper-hardhat-config");
       });
 
       // ::::::::::::: UNIT TEST FOR CREATION CONTRACT ::::::::::::: //
+
+      describe("🔎  Test freelance contract function creation unit test", async function () {
+        beforeEach(async function () {
+          await deployments.fixture(["freelancecontract"]);
+          freelancecontract = await ethers.getContract("freelanceContract");
+          client = accounts[1];
+          worker = accounts[2];
+          await freelancecontract.connect(client).addClient();
+          await freelancecontract.connect(worker).addWorker();
+        });
+        // Test createContract from client
+        it("should CREATE a new contract called by Client", async function () {
+          _price = 1;
+          _deadline = 100;
+          _today = 0;
+          title = "title";
+          description = "description";
+          _hash = ethers.utils.keccak256(
+            ethers.utils.toUtf8Bytes(title + description)
+          );
+          expect(await freelancecontract.contractCounter()).equal(0);
+          await freelancecontract
+            .connect(client)
+            .createContract(_deadline, _today, _hash, { value: _price });
+          expect(await freelancecontract.contractCounter()).equal(1);
+        });
+        it("should REVERT if price = 0 ", async function () {
+          _price = 0;
+          _deadline = 100;
+          _today = 0;
+          title = "title";
+          description = "description";
+          _hash = ethers.utils.keccak256(
+            ethers.utils.toUtf8Bytes(title + description)
+          );
+          await expect(
+            freelancecontract
+              .connect(client)
+              .createContract(_deadline, _today, _hash, { value: _price })
+          ).to.be.revertedWith("The price must be greater than 0.");
+        });
+      });
 
       // createContract // contractCounter // cancelContractByClient // cancelContractByWorker // contractStates // signContract
 
@@ -268,6 +328,16 @@ const { developmentChains } = require("../helper-hardhat-config");
           jury = await freelancecontract.getJuryMembers(1);
           expect(jury.length).equal(3);
         });
+
+        it("should worker requestClientValidation and able to open dispute ", async function () {
+          count = await freelancecontract.disputeCounter();
+          expect(count).equal(0);
+          contract = await freelancecontract.contracts(1);
+          await freelancecontract.connect(worker).requestClientValidation(1);
+          await freelancecontract.connect(worker).openDispute(1);
+          newCount = await freelancecontract.disputeCounter();
+          expect(newCount).equal(1);
+        });
       });
 
       // // ::::::::::::: UNIT TEST FOR VOTING PHASE::::::::::::: //
@@ -275,7 +345,7 @@ const { developmentChains } = require("../helper-hardhat-config");
       // // vote // juryCounter // random // randomResult
 
       describe("🔎 Test function of Voting process ", async function () {
-        beforeEach(async () => {
+        before(async () => {
           await deployments.fixture(["freelancecontract"]);
           freelancecontract = await ethers.getContract("freelanceContract");
           client = accounts[1];
@@ -320,8 +390,7 @@ const { developmentChains } = require("../helper-hardhat-config");
 
         // // check if juros dispute has no vote yet - check hasVoted
         it("should return false if juryMembers has no voted", async function () {
-          jury = juryMembers[0];
-          hasVoted = await freelancecontract.hasVoted(1, jury);
+          hasVoted = await freelancecontract.hasVoted(1, juryMembers[0]);
           expect(hasVoted).equal(false);
         });
 
@@ -342,16 +411,16 @@ const { developmentChains } = require("../helper-hardhat-config");
           totalVoteCount = dispute.totalVoteCount;
           clientVoteCount = dispute.clientVoteCount;
           workerVoteCount = dispute.workerVoteCount;
-          expect(totalVoteCount).equal(0);
-          expect(clientVoteCount).equal(0);
+          expect(totalVoteCount).equal(1);
+          expect(clientVoteCount).equal(1);
           expect(workerVoteCount).equal(0);
-          await freelancecontract.connect(jury[0]).vote(1, true);
+          await freelancecontract.connect(jury[1]).vote(1, true);
           dispute = await freelancecontract.disputes(1);
           totalVoteCount = dispute.totalVoteCount;
           clientVoteCount = dispute.clientVoteCount;
           workerVoteCount = dispute.workerVoteCount;
-          expect(totalVoteCount).equal(1);
-          expect(clientVoteCount).equal(1);
+          expect(totalVoteCount).equal(2);
+          expect(clientVoteCount).equal(2);
           expect(workerVoteCount).equal(0);
         });
 
@@ -360,16 +429,16 @@ const { developmentChains } = require("../helper-hardhat-config");
           totalVoteCount = dispute.totalVoteCount;
           clientVoteCount = dispute.clientVoteCount;
           workerVoteCount = dispute.workerVoteCount;
-          expect(totalVoteCount).equal(0);
-          expect(clientVoteCount).equal(0);
+          expect(totalVoteCount).equal(2);
+          expect(clientVoteCount).equal(2);
           expect(workerVoteCount).equal(0);
-          await freelancecontract.connect(jury[0]).vote(1, false);
+          await freelancecontract.connect(jury[2]).vote(1, false);
           dispute = await freelancecontract.disputes(1);
           totalVoteCount = dispute.totalVoteCount;
           clientVoteCount = dispute.clientVoteCount;
           workerVoteCount = dispute.workerVoteCount;
-          expect(totalVoteCount).equal(1);
-          expect(clientVoteCount).equal(0);
+          expect(totalVoteCount).equal(3);
+          expect(clientVoteCount).equal(2);
           expect(workerVoteCount).equal(1);
         });
       });
