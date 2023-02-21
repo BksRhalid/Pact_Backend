@@ -10,13 +10,19 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 
 /**
  * @title ContractPact
- * @dev This contract provides a simple workflow for a client to hire a worker to perform a task,
+ * @dev This contract manage PACT dAPP with main functionallités to create a contract between client to hire a worker to perform a task,
  *      and allows the worker to sign the contract, start working, request client validation,
  *      and for the client to validate the work and allow payment. The client can also cancel the
  *      contract before the worker signs, and the worker can cancel the contract at any time.
- *      If a dispute arises, the client or worker can open a dispute and a jury will be selected
- *      to resolve the dispute.
- * @author: RhalidBks
+ *      If a dispute arises, the client or worker can open a dispute and a jury will be selected randomly
+ *      to resolve the dispute. They resolve the dispute by voting on whether the worker or client is
+ *      in the right. The jury can also vote to split the payment between the client and worker.
+ * @notice This contract is not audited and should not be used in production.
+ * @dev This contract is working in progress and is not yet complete.
+ * todo: add a function to limit time for the jury to vote and if not call a new jury to vote
+ * todo: add a function to limit time for the client to reveal the vote and if not call a new jury to vote
+ * todo: add payment splitter to split the payment between the client and worker
+ * todo: improve randomness of jury selection to pay less gas
  */
 contract freelanceContract is randomNumber, Ownable {
     // State variables
@@ -547,7 +553,6 @@ contract freelanceContract is randomNumber, Ownable {
     /**
      * @notice Returns the addresses of all the jury members for a given dispute
      * @param _disputeId The ID of the dispute to get jury members for
-     * @param _juryAddress The address to check for membership in the dispute's jury
      * @return An array of addresses representing the jury members for the dispute
      */
     function getJuryMembers(uint256 _disputeId)
@@ -595,7 +600,6 @@ contract freelanceContract is randomNumber, Ownable {
      * @dev This function for the jury to vote for the dispute between the client and the worker
      * @param _contractId The ID of the contract.
      * @param _vote The vote of the jury member.
-     * @return A boolean indicating whether the vote was successful.
      */
     function vote(uint256 _contractId, bool _vote)
         external
@@ -637,7 +641,6 @@ contract freelanceContract is randomNumber, Ownable {
     /**
      * @dev This function reveals the state of a dispute and determines whether the client or the worker won the dispute.
      * @param _contractId The ID of the contract.
-     * @return A boolean indicating whether the reveal state was successful.
      */
     function revealState(uint256 _contractId)
         external
@@ -664,7 +667,6 @@ contract freelanceContract is randomNumber, Ownable {
     /**
      * @dev This function allows the client or worker to pull payment and split if jury dispute with jury Members and protocol share and the worker if he won the dispute.
      * @param _contractId The ID of the contract.
-     * @return A boolean indicating whether the payment was successful.
      */
     //TODO: ADAPT AND USE PAYMENT SPLITTER
     function pullPayment(uint256 _contractId)
