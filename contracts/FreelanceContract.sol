@@ -593,9 +593,7 @@ contract freelanceContract is randomNumber, Ownable {
         }
         return result;
     }
-
-    // Function for the jury to vote for the dispute between the client and the worker
-
+    
     /**
      * @dev This function for the jury to vote for the dispute between the client and the worker
      * @param _contractId The ID of the contract.

@@ -2,6 +2,7 @@ require("@nomicfoundation/hardhat-toolbox");
 require("dotenv").config();
 require("@nomiclabs/hardhat-etherscan");
 require("hardhat-deploy");
+require("hardhat-docgen");
 require("hardhat-gas-reporter");
 require("solidity-coverage");
 
@@ -46,5 +47,9 @@ module.exports = {
       default: 0,
       1: 0,
     },
+  },
+  docgen: {
+    path: "./docs",
+    clear: true,
   },
 };
