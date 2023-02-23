@@ -9,7 +9,7 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 // Contract to create a freelance contract
 
 /**
- * @title ContractPact
+ * @title freelanceContract
  * @dev This contract manage PACT dAPP with main functionallités to create a contract between client to hire a worker to perform a task,
  *      and allows the worker to sign the contract, start working, request client validation,
  *      and for the client to validate the work and allow payment. The client can also cancel the
