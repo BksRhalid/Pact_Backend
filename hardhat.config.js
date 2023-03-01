@@ -52,4 +52,8 @@ module.exports = {
     path: "./docs",
     clear: true,
   },
+  // gasReporter: {
+  //   currency: "USD",
+  //   gasPrice: 21,
+  // },
 };

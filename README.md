@@ -18,9 +18,7 @@
     <a href="https://github.com/BksRhalid/Pact_Frontend.git"><strong>Explore the docs »</strong></a>
     <br />
     <br />
-    <a href="https://github.com/BksRhalid/Pact_Frontend.git/issues">Report Bug</a>
-    ·
-    <a href="https://github.com/BksRhalid/Pact_Frontend.git/features">Request Feature</a>
+    <a href="https://drive.google.com/file/d/1Vyh0pAuHNHYqMDo-ZWH71mUt8EWrTdN8/view">Video Demo</a>
   </p>
 </div>
 
